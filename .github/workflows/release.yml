@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags: [ 'v*' ]
-    branches: [ 'master' ]
+    branches: [ 'master', 'fix/seek-timeout' ]
   pull_request:
     branches: [ 'master' ]
 
