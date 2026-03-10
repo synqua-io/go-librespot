@@ -46,10 +46,20 @@ func (tl *List) Metadata() map[string]string {
 }
 
 func (tl *List) TrySeek(ctx context.Context, f func(track *connectpb.ContextTrack) bool) error {
-	if err := tl.Seek(ctx, f); err != nil {
-		tl.log.WithError(err).Warnf("failed seeking to track in context %s", tl.ctx.Uri())
+	// Use a short timeout for the seek itself to avoid blocking the entire
+	// dealer request on large contexts (e.g. radio stations with 10k+ tracks).
+	seekCtx, seekCancel := context.WithTimeout(ctx, 5*time.Second)
+	defer seekCancel()
 
-		err = tl.tracks.moveStart(ctx)
+	if err := tl.Seek(seekCtx, f); err != nil {
+		tl.log.WithError(err).Warnf("failed seeking to track in context %s, falling back to start", tl.ctx.Uri())
+
+		// Use a fresh context for the fallback since the seek timeout (or
+		// the parent context) may already be expired.
+		fallbackCtx, fallbackCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer fallbackCancel()
+
+		err = tl.tracks.moveStart(fallbackCtx)
 		if err != nil {
 			return err
 		}
